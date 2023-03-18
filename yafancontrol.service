@@ -1,0 +1,11 @@
+[Unit]
+Description=Yafancontrol fan management service
+After=multi-user.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/yafancontrol.sh
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
