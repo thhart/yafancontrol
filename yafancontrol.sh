@@ -15,7 +15,7 @@ temp_file="/sys/devices/virtual/thermal/thermal_zone0/temp"
 fan_file="/proc/acpi/ibm/fan"
 
 # Load the variables from the configuration file if it exists
-config_file="yafancontrol.cfg"
+config_file="/etc/yafancontrol/yafancontrol.cfg"
 if [ -f "$config_file" ]; then
   source "$config_file"
   # or use the dot operator:
@@ -31,7 +31,6 @@ fi
 fan_level_auto="level auto"
 fan_level_high="level 7"
 fan_level_full="level disengaged"
-fan_level_off="level 0"
 fan_level="$fan_level_auto"
 kicked=false
 current=5000
@@ -101,12 +100,12 @@ while true; do
 
   if [ $temp -gt $temp_kick_in ] && ! $kicked; then
     kicked=true
-    [ $verbosity -ge 7 ] && echo "Kicking in at $t"
+    [ $verbosity -ge 7 ] && echo "Kicking in at $t°"
   fi
 
   if [ $temp -lt $temp_kick_off ] && $kicked == true; then
     kicked=false
-    [ $verbosity -ge 7 ] && echo "Kicking out at $t"
+    [ $verbosity -ge 7 ] && echo "Kicking out at $t°"
   fi
 
   if $kicked; then
