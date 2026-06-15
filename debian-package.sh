@@ -1,4 +1,9 @@
 #!/bin/bash
+set -euo pipefail
+
+# Build the yafancontrol .deb. Compiles the C implementation (yafancontrol.c)
+# into /usr/bin/yafancontrol, installs the config and the systemd unit.
+# NOTE: bump PACKAGE_VERSION before publishing a release with changed contents.
 
 # Define variables
 PACKAGE_NAME="yafancontrol"
@@ -18,30 +23,41 @@ mkdir "$BUILD_DIR"
 # Create package directories
 mkdir -p "$BUILD_DIR/$PACKAGE_DIR/DEBIAN"
 mkdir -p "$BUILD_DIR/$PACKAGE_DIR/usr/bin"
+mkdir -p "$BUILD_DIR/$PACKAGE_DIR/etc/yafancontrol"
 mkdir -p "$BUILD_DIR/$PACKAGE_DIR/etc/systemd/system"
 
-# Copy files
-cp "$SCRIPT_DIR/yafancontrol.sh" "$BUILD_DIR/$PACKAGE_DIR/usr/bin/yafancontrol"
-cp "$SCRIPT_DIR/yafancontrol.cfg" "$BUILD_DIR/$PACKAGE_DIR/etc/yafancontrol.cfg"
+# Compile the C implementation -> /usr/bin/yafancontrol
+cc -O2 -Wall -Wextra -o "$BUILD_DIR/$PACKAGE_DIR/usr/bin/yafancontrol" "$SCRIPT_DIR/yafancontrol.c"
+
+# Copy config (read from /etc/yafancontrol/yafancontrol.cfg by the binary) and unit
+cp "$SCRIPT_DIR/yafancontrol.cfg" "$BUILD_DIR/$PACKAGE_DIR/etc/yafancontrol/yafancontrol.cfg"
 cp "$SCRIPT_DIR/yafancontrol.service" "$BUILD_DIR/$PACKAGE_DIR/etc/systemd/system/"
 
 # Set permissions
 chmod 755 "$BUILD_DIR/$PACKAGE_DIR/usr/bin/yafancontrol"
 
+# Mark the config as a conffile so dpkg preserves local edits across upgrades
+echo "/etc/yafancontrol/yafancontrol.cfg" > "$BUILD_DIR/$PACKAGE_DIR/DEBIAN/conffiles"
+
 # Create control file
 CONTROL_FILE="$BUILD_DIR/$PACKAGE_DIR/DEBIAN/control"
-echo "Package: $PACKAGE_NAME" >> "$CONTROL_FILE"
-echo "Version: $PACKAGE_VERSION" >> "$CONTROL_FILE"
-echo "Maintainer: $PACKAGE_MAINTAINER" >> "$CONTROL_FILE"
-echo "Architecture: $(dpkg --print-architecture)" >> "$CONTROL_FILE"
-echo "Description: Yet Another Fan Control" >> "$CONTROL_FILE"
+{
+  echo "Package: $PACKAGE_NAME"
+  echo "Version: $PACKAGE_VERSION"
+  echo "Maintainer: $PACKAGE_MAINTAINER"
+  echo "Architecture: $(dpkg --print-architecture)"
+  echo "Depends: libc6"
+  echo "Description: Yet Another Fan Control - in-process ThinkPad fan controller"
+} > "$CONTROL_FILE"
 
 # Create postinst script
 POSTINST_FILE="$BUILD_DIR/$PACKAGE_DIR/DEBIAN/postinst"
-echo "#!/bin/bash" >> "$POSTINST_FILE"
-echo "systemctl daemon-reload" >> "$POSTINST_FILE"
-echo "systemctl enable yafancontrol.service" >> "$POSTINST_FILE"
-echo "systemctl restart yafancontrol.service" >> "$POSTINST_FILE"
+{
+  echo "#!/bin/bash"
+  echo "systemctl daemon-reload"
+  echo "systemctl enable yafancontrol.service"
+  echo "systemctl restart yafancontrol.service"
+} > "$POSTINST_FILE"
 chmod 755 "$POSTINST_FILE"
 
 # Build package
@@ -52,3 +68,5 @@ mv "$BUILD_DIR/$PACKAGE_FILENAME" "$SCRIPT_DIR"
 
 # Clean build directory
 rm -rf "$BUILD_DIR"
+
+echo "built $PACKAGE_FILENAME"
