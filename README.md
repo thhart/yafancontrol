@@ -27,13 +27,13 @@ Prerequisite: the `thinkpad_acpi` module must be loaded with `fan_control=1`
 **Debian/Ubuntu (.deb):**
 ```sh
 ./debian-package.sh           # compiles yafancontrol.c, builds yafancontrol_<ver>.deb
-sudo dpkg -i yafancontrol_1.2.deb
+sudo dpkg -i yafancontrol_1.3.deb
 ```
 
 **openSUSE/Fedora (.rpm):**
 ```sh
 ./rpm-package.sh              # needs rpmbuild + gcc; builds from yafancontrol.spec
-sudo rpm -i ~/rpmbuild/RPMS/*/yafancontrol-1.2-*.rpm
+sudo rpm -i ~/rpmbuild/RPMS/*/yafancontrol-1.3-*.rpm
 ```
 
 **Manual:**

@@ -13,9 +13,13 @@
  *     for ~60 s on every start to discover min/max RPM. Those bounds are now the
  *     config keys fan_speed_min / fan_speed_max; run `yafancontrol --calibrate`
  *     once to measure them for your machine.
- *   - Arms the thinkpad_acpi EC fan watchdog (120 s): if the daemon dies
- *     uncleanly the firmware resumes safe fan control within 120 s. On a clean
- *     SIGTERM/SIGINT it restores "level auto" immediately, like the bash trap.
+ *   - While idle (below kick_in) it polls ONLY temperature and leaves the fan to
+ *     the EC — no per-second fan tachometer reads, which otherwise storm the EC
+ *     GPE (~30 Hz) for data the idle path never uses. It takes manual control,
+ *     reads fan RPM, and arms the thinkpad_acpi EC fan watchdog (120 s) only when
+ *     actively cooling (above kick_in); a crash there reverts the EC to auto
+ *     within 120 s. On a clean SIGTERM/SIGINT it restores "level auto", like the
+ *     bash trap.
  *
  * Build:  cc -O2 -Wall -Wextra -o yafancontrol yafancontrol.c
  *
@@ -164,12 +168,10 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    fan_write(ffd, "watchdog 120");       /* EC fail-safe if we crash */
-
     bool kicked = false;
     long current = fan_speed_max;         /* RPM setpoint, clamped [min,max]  */
     const char *level = L_AUTO;           /* last commanded level             */
-    fan_write(ffd, L_AUTO);
+    fan_write(ffd, L_AUTO);               /* hand the fan to the EC initially */
 
     if (verbosity >= 5)
         fprintf(stderr, "yafancontrol: started (kick_in=%ld kick_off=%ld raise=%ld "
@@ -177,22 +179,25 @@ int main(int argc, char **argv) {
                 temp_kick_in, temp_kick_off, temp_raise, temp_lower,
                 fan_speed_min, fan_speed_max, interval_ms);
 
+    /* COOL (< kick_in): let the EC manage the fan; poll temperature ONLY, with no
+     * EC fan I/O. Reading the fan tachometers every second otherwise storms the
+     * EC GPE (~30 Hz) for data the idle path never uses. KICKED (> kick_in): take
+     * manual control, arm the EC watchdog, and run the closed loop reading fan
+     * RPM each tick. On a crash while KICKED the watchdog reverts the EC to auto. */
     while (!g_stop) {
         long temp = read_temp(tfd);
-        long fan  = read_fan_rpm(rfd);
         if (temp < 0) { sleep_ms(interval_ms); continue; }
 
-        if (temp > temp_kick_in && !kicked) {
-            kicked = true;
-            if (verbosity >= 7) fprintf(stderr, "yafancontrol: kick in @ %ld°C\n", temp/1000);
-        }
-        if (temp < temp_kick_off && kicked) {
-            kicked = false;
-            if (verbosity >= 7) fprintf(stderr, "yafancontrol: kick out @ %ld°C\n", temp/1000);
-        }
+        bool was_kicked = kicked;
+        if (temp > temp_kick_in)  kicked = true;
+        if (temp < temp_kick_off) kicked = false;
 
-        const char *want = level;
         if (kicked) {
+            if (!was_kicked) {                     /* COOL -> KICKED: assume control */
+                fan_write(ffd, "watchdog 120");    /* fail-safe if we die while hot  */
+                if (verbosity >= 7) fprintf(stderr, "yafancontrol: kick in @ %ld°C\n", temp/1000);
+            }
+            long fan = read_fan_rpm(rfd);          /* EC read — only while controlling */
             if (temp > temp_raise) {
                 current += 200;
                 if (current > fan_speed_max) current = fan_speed_max;
@@ -201,23 +206,27 @@ int main(int argc, char **argv) {
                 current -= 200;
                 if (current < fan_speed_min) current = fan_speed_min;
             }
+            const char *want = level;
             if      (fan >= 0 && fan < current - current/40) want = L_FULL;
             else if (fan >= 0 && fan > current)              want = L_HIGH;
             /* else: within the deadband — hold the current level */
-        } else {
-            want = L_AUTO;
-        }
-
-        if (want != level) {
-            fan_write(ffd, want);
-            level = want;
-            if (verbosity >= 7)
+            fan_write(ffd, want);                  /* re-assert each tick: feeds watchdog */
+            if (want != level && verbosity >= 7)
                 fprintf(stderr, "yafancontrol: %ld°C fan=%ld set=%ld -> %s\n",
                         temp/1000, fan, current, want);
-        } else {
-            fan_write(ffd, want);         /* re-assert: keeps the EC watchdog fed */
-            if (verbosity >= 8)
+            else if (verbosity >= 8)
                 fprintf(stderr, "yafancontrol: %ld°C fan=%ld (%s)\n", temp/1000, fan, want);
+            level = want;
+        } else {
+            if (was_kicked || level != L_AUTO) {   /* KICKED -> COOL: release once */
+                fan_write(ffd, L_AUTO);
+                fan_write(ffd, "watchdog 0");      /* disarm; the EC self-manages */
+                level = L_AUTO;
+                if (was_kicked && verbosity >= 7)
+                    fprintf(stderr, "yafancontrol: kick out @ %ld°C\n", temp/1000);
+            }
+            if (verbosity >= 8)
+                fprintf(stderr, "yafancontrol: %ld°C (idle, EC-managed)\n", temp/1000);
         }
 
         sleep_ms(interval_ms);
