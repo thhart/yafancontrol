@@ -6,7 +6,7 @@ set -euo pipefail
 # NOTE: bump Version in yafancontrol.spec before publishing changed contents.
 
 NAME="yafancontrol"
-VERSION="1.0"
+VERSION="1.2"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 TOP="$(rpm --eval %{_topdir} 2>/dev/null || echo "$HOME/rpmbuild")"
 

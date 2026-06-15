@@ -7,7 +7,7 @@ set -euo pipefail
 
 # Define variables
 PACKAGE_NAME="yafancontrol"
-PACKAGE_VERSION="1.0"
+PACKAGE_VERSION="1.2"
 PACKAGE_MAINTAINER="Thomas Hartwig <thomas.hartwig@gmail.com>"
 BUILD_DIR="build"
 SCRIPT_DIR=$(pwd)

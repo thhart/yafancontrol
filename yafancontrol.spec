@@ -1,5 +1,5 @@
 Name:           yafancontrol
-Version:        1.0
+Version:        1.2
 Release:        1%{?dist}
 Summary:        Yet Another Fan Control - in-process ThinkPad fan controller
 
@@ -46,6 +46,6 @@ install -Dm0644 yafancontrol.service    %{buildroot}%{_unitdir}/yafancontrol.ser
 %systemd_postun_with_restart yafancontrol.service
 
 %changelog
-* Sun Jun 15 2026 Thomas Hartwig <thomas.hartwig@gmail.com> - 1.0-1
+* Mon Jun 15 2026 Thomas Hartwig <thomas.hartwig@gmail.com> - 1.2-1
 - C reimplementation of the bash yafancontrol (no per-second process churn);
   fan_speed_min/max config keys + --calibrate; EC fan watchdog fail-safe.
